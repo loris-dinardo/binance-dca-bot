@@ -1,10 +1,10 @@
 export class SlackNotification {
-    constructor(authUri: string) {
+    constructor(authUri) {
         this.authUri = authUri;
         this.url = "https://hooks.slack.com/services/" + authUri;
     }
 
-    async sendMessage(messageText: string) {
+    async sendMessage(messageText) {
         if (!this.authUri) {
             return;
         }
