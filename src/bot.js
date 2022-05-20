@@ -8,6 +8,7 @@ import { BinanceAPI } from "./services/binance-api.js";
 import { SendGridNotification } from "./services/sendgrid-notification.js";
 import { TelegramAPI } from "./services/telegram-api.js"
 import { MongoDb } from "./services/mongodb.js";
+import {SlackNotification} from "./services/slack-notification.js";
 
 /**
  * Load .env file
@@ -57,6 +58,12 @@ const MONGODB_URI = process.env.MONGODB_URI || null;
 const mongoDb = new MongoDb(MONGODB_URI);
 
 /**
+ * Slack Integration
+ */
+const SLACK_AUTH_TOKEN = process.env.SLACK_AUTH_TOKEN || null;
+const slack = new SlackNotification(SLACK_AUTH_TOKEN);
+
+/**
  * Actually place the order
  * @param {object} trade
  */
@@ -76,23 +83,26 @@ async function placeOrder(trade) {
 		await sendGrid.send(`Buy order executed (${pair})`, successText + data);
 
 		const details = binance.getOrderDetails(asset, currency, response);
-		await telegram.sendMessage(`✅ *Buy order executed (${pair})*\n\n` +
+		const detailsToString = `✅ *Buy order executed (${pair})*\n\n` +
 			`_Order ID:_ ${details.orderId}\n` +
 			`_Date:_ ${details.transactionDateTime}\n` +
 			`_Quantity:_ ${details.quantity} ${details.asset}\n` +
 			`_Total:_ ${details.totalCost} ${details.currency}\n` +
 			`_Average Value:_ ${details.averageAssetValue} ${details.currency}/${details.asset}\n` +
 			`_Fees:_ ${details.commissions} ${details.commissionAsset}\n\n` +
-			`${details.fills.join('\n')}`);
+			`${details.fills.join('\n')}`;
+		await telegram.sendMessage(detailsToString);
+		await slack.sendMessage(detailsToString);
 	} else {
 		const errorText = response.msg || `Unexpected error placing buy order for ${pair}`;
 		console.error(colors.red(errorText));
-
 		await sendGrid.send(`Buy order failed(${pair})`, errorText);
-		await telegram.sendMessage(`❌ *Buy order failed (${pair})*\n\n` +
+		const errorToString = `❌ *Buy order failed (${pair})*\n\n` +
 			'```' +
 			`${errorText}` +
-			'```');
+			'```';
+		await telegram.sendMessage(errorToString);
+		await slack.sendMessage(errorToString);
 	}
 }
 
@@ -182,11 +192,13 @@ async function runBot() {
 			cron.scheduleJob(schedule, async () => await placeOrder(trade));
 		}
 	}
-	await telegram.sendMessage('🏁 *Binance DCA Bot Started*\n\n' +
+	const startMessage = '🏁 *Binance DCA Bot Started*\n\n' +
 		`_Date:_ ${new Date().toLocaleString()}\n\n` +
 		'```\n' +
 		getBuyDetails(TRADES) +
-		'```');
+		'```';
+	await telegram.sendMessage(startMessage);
+	await slack.sendMessage(startMessage);
 }
 
 await runBot();
